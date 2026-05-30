@@ -30,6 +30,8 @@ export type TradeWithRelations = {
   notes: string | null;
   createdAt: Date;
   updatedAt: Date;
+  propChallengeId: string | null;
   setup: { id: string; name: string; color: string | null; description: string | null; userId: string } | null;
   screenshots: { id: string; url: string; tradeId: string; extracted: unknown }[];
+  propChallenge: { id: string; firmName: string; phase: string | null } | null;
 };

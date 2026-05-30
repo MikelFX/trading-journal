@@ -54,3 +54,17 @@ export const UserSettingsSchema = z.object({
 });
 
 export type UserSettingsData = z.infer<typeof UserSettingsSchema>;
+
+export const PropChallengeSchema = z.object({
+  firmName: z.string().min(1, "Název firmy je povinný").max(100),
+  phase: z.string().max(50).optional(),
+  accountSize: z.number().positive("Velikost účtu musí být kladná"),
+  dailyLossLimit: z.number().positive("Denní limit musí být kladný"),
+  maxLossLimit: z.number().positive("Max ztráta musí být kladná"),
+  profitTarget: z.number().positive().optional(),
+  minTradingDays: z.number().int().positive().optional(),
+  startDate: z.string().datetime(),
+  status: z.enum(["ACTIVE", "PASSED", "FAILED"]).default("ACTIVE"),
+});
+
+export type PropChallengeFormData = z.infer<typeof PropChallengeSchema>;

@@ -1,14 +1,15 @@
 # AI Trading Journal — Zadání pro programátora
 
 > Inteligentní obchodní deník pro forex/krypto tradery — nezávislý na konkrétní strategii.
-> Cíl: ne "další GPT wrapper", ale nástroj, který reálně zlepšuje edge tradera — přesná analytika + groundovaná AI interpretace + prémiový UX.
+> **Pozicování:** retail-first, **freemium**; prop-firm režim jako prémiový tier. AI kouč běží na **Claude API**.
+> Cíl: ne "další GPT wrapper", ale nástroj, který reálně zlepšuje edge tradera — přesná analytika + groundovaný proaktivní AI kouč + prémiový UX.
 
 ---
 
 ## 1. Tři principy, na kterých stojí kvalita (nepřekročitelné)
 
 1. **AI nikdy nepočítá čísla.** Veškerá matematika (statistiky, metriky, agregace) se počítá deterministicky v kódu. AI dostává až hotová, ověřená čísla a *pouze je interpretuje, hledá vzory a kóčuje*. Tím se eliminují halucinace a každé tvrzení AI lze podložit konkrétním obchodem.
-2. **App rozumí TVÉMU systému — nic není zadrátované natvrdo.** Uživatel si v nastavení definuje vlastní **setupy** (pojmenované obchodní vzory) a libovolné **tagy**. Deník pak segmentuje výsledky podle nich, takže funguje pro jakoukoliv strategii. Generický deník hází vše na hromadu — tenhle ne.
+2. **App rozumí TVÉMU systému — nic není zadrátované natvrdo.** Uživatel si v nastavení definuje vlastní **setupy** a libovolné **tagy**. Deník segmentuje výsledky podle nich → funguje pro jakoukoliv strategii.
 3. **Prémiový UX.** Moderní, futuristický design s kvalitními, plynulými animacemi (cíl 60 fps). Animace jsou účelové, ne dekorativní.
 
 ---
@@ -19,69 +20,74 @@
 |---|---|
 | Framework | **Next.js 16+** (App Router, React Server Components, Server Actions) |
 | Jazyk | TypeScript (`strict: true`) |
-| Databáze | **PostgreSQL** + **Prisma** ORM (alternativa: Drizzle) |
-| AI | **OpenRouter API** (model konfigurovatelný přes env) |
+| Databáze | **PostgreSQL** + **Prisma** ORM |
+| AI | **Anthropic Claude API** (Messages API) — model dle tieru/úkolu |
 | Grafy (cena/equity) | **lightweight-charts** (TradingView lib) |
 | Grafy (distribuce/bary) | **Recharts** |
 | Animace | **Motion** (Framer Motion) — spring-based, GPU-accelerated |
 | Styling | **Tailwind CSS** + custom design tokeny |
 | Validace | **Zod** (schémata sdílená klient ↔ server) |
+| Sdílitelné obrázky | **Satori / @vercel/og** (server-side render karet) |
 | Auth | Režim A (single-user/lokální): bez auth · Režim B (multi-user): **Clerk** nebo Auth.js |
-| Upload souborů | UploadThing / S3-kompatibilní storage (pro screenshoty grafů) |
+| Upload souborů | UploadThing / S3-kompatibilní storage |
 
-**Poznámka k auth:** Data deníku jsou soukromá a per-user. Pro rychlý start doporučuju Režim A (single-user, žádný login), s čistou abstrakcí `userId`, aby šel kdykoli zapnout Režim B bez přepisování datové vrstvy.
+**Auth poznámka:** Data jsou per-user. Pro rychlý start Režim A (žádný login), ale s čistou abstrakcí `userId`, aby šel kdykoli zapnout Režim B bez přepisu datové vrstvy.
 
 ---
 
 ## 3. Datový model (jádro celé appky)
 
-Tohle je první věc, kterou postavit — vše ostatní na ní stojí. Klíčové je, že **setupy i pravidla jsou data, ne kód** — uživatel si je definuje sám.
+Setupy, pravidla i prop challenge jsou **data, ne kód** — definuje si je uživatel.
 
 ```prisma
 model Trade {
   id            String   @id @default(cuid())
-  userId        String                         // připraveno na multi-user
+  userId        String
 
   // --- Identifikace ---
   symbol        String                         // "EURUSD", "BTCUSD", "US30"...
   direction     Direction                      // LONG | SHORT
-  status        TradeStatus  @default(CLOSED)   // OPEN | CLOSED | CANCELLED
+  status        TradeStatus  @default(CLOSED)
 
   // --- Exekuce ---
   entryPrice    Float
   exitPrice     Float?
-  stopLoss      Float                          // plánovaný SL
-  takeProfit    Float?                         // plánovaný TP
-  positionSize  Float                          // velikost pozice (lots / units)
+  stopLoss      Float
+  takeProfit    Float?
+  positionSize  Float
   entryTime     DateTime
   exitTime      DateTime?
 
-  // --- Risk & výsledek (počítá engine, ne uživatel) ---
-  riskAmount    Float                          // riskovaná částka v měně
-  riskPercent   Float?                         // % z účtu
-  realizedPnl   Float?                         // čistý výsledek v měně
+  // --- Risk & výsledek (počítá engine) ---
+  riskAmount    Float
+  riskPercent   Float?
+  realizedPnl   Float?
   fees          Float    @default(0)
-  rMultiple     Float?                         // realizedPnl / riskAmount (počítáno)
+  rMultiple     Float?                         // realizedPnl / riskAmount
 
-  // --- Kontext obchodu (definuje uživatel, nic natvrdo) ---
-  setupId        String?                       // odkaz na vlastní setup uživatele
+  // --- Kontext (definuje uživatel) ---
+  setupId        String?
   setup          Setup?   @relation(fields: [setupId], references: [id])
-  tags           String[]                      // libovolné vlastní tagy
+  tags           String[]
   entryTimeframe String?                       // "1H", "15m", "5m"... volný text
   session        Session?                      // ASIA | LONDON | NEWYORK
 
+  // --- Prop (volitelné napojení na challenge) ---
+  propChallengeId String?
+  propChallenge   PropChallenge? @relation(fields: [propChallengeId], references: [id])
+
   // --- MAE / MFE ---
-  mae           Float?                         // max adverse excursion (v R)
-  mfe           Float?                         // max favorable excursion (v R)
+  mae           Float?                         // v R
+  mfe           Float?                         // v R
 
   // --- Dodržování pravidel (engine vyhodnotí dle UserSettings) ---
-  followedRiskRule   Boolean?                  // risk <= maxRiskPercent?
-  followedRRTarget   Boolean?                  // RR >= targetRR?
-  withinDailyLimit   Boolean?                  // <= maxTradesPerDay?
-  movedStop          Boolean  @default(false)  // posunul SL? (zadá uživatel)
+  followedRiskRule   Boolean?
+  followedRRTarget   Boolean?
+  withinDailyLimit   Boolean?
+  movedStop          Boolean  @default(false)
 
   // --- Behaviorální / poznámky ---
-  emotionState  EmotionState?                  // CALM | FOMO | REVENGE | TILT | UNCERTAIN
+  emotionState  EmotionState?
   notes         String?       @db.Text
   screenshots   Screenshot[]
 
@@ -95,11 +101,10 @@ model Trade {
 model Setup {
   id          String  @id @default(cuid())
   userId      String
-  name        String                          // "Breakout", "Pullback", "Range reversal"...
+  name        String                          // "Breakout", "Pullback"...
   description String?
-  color       String?                          // pro odlišení v UI
+  color       String?
   trades      Trade[]
-
   @@unique([userId, name])
 }
 
@@ -107,18 +112,33 @@ model UserSettings {
   id               String @id @default(cuid())
   userId           String @unique
   accountSize      Float?
-  maxRiskPercent   Float  @default(1)           // pravidlo: max risk na obchod
-  targetRR         Float  @default(2)           // pravidlo: cílové RR
-  maxTradesPerDay  Int    @default(3)           // pravidlo: max obchodů/den
+  maxRiskPercent   Float  @default(1)
+  targetRR         Float  @default(2)
+  maxTradesPerDay  Int    @default(3)
   currency         String @default("USD")
+  plan             Plan   @default(FREE)        // FREE | PRO | ELITE
+}
+
+model PropChallenge {
+  id              String     @id @default(cuid())
+  userId          String
+  firmName        String                        // "FTMO", "MyFundedFX"...
+  phase           String?                       // "Phase 1", "Funded"...
+  accountSize     Float
+  dailyLossLimit  Float                          // max ztráta za den
+  maxLossLimit    Float                          // celkový max drawdown
+  profitTarget    Float?                         // cíl pro postup
+  minTradingDays  Int?
+  startDate       DateTime
+  status          PropStatus @default(ACTIVE)    // ACTIVE | PASSED | FAILED
+  trades          Trade[]
 }
 
 model Screenshot {
   id        String  @id @default(cuid())
   tradeId   String
   url       String
-  // metadata vytažená AI vision z grafu (volitelné)
-  extracted Json?
+  extracted Json?                               // metadata z AI vision
   trade     Trade   @relation(fields: [tradeId], references: [id], onDelete: Cascade)
 }
 
@@ -126,45 +146,32 @@ enum Direction      { LONG SHORT }
 enum TradeStatus    { OPEN CLOSED CANCELLED }
 enum Session        { ASIA LONDON NEWYORK }
 enum EmotionState   { CALM FOMO REVENGE TILT UNCERTAIN }
+enum PropStatus     { ACTIVE PASSED FAILED }
+enum Plan           { FREE PRO ELITE }
 ```
 
 ---
 
 ## 4. Statistický engine (deterministický)
 
-Modul `lib/stats/` — **čisté funkce**, vstup = `Trade[]`, výstup = spočítané metriky. Žádný LLM, žádný side effect. Pokryté unit testy.
+Modul `lib/stats/` — **čisté funkce**, vstup = `Trade[]`, výstup = metriky. Žádný LLM, žádný side effect. Pokryté unit testy.
 
-**Základní metriky:**
-- počet obchodů, výher, proher, **win rate**
-- net PnL, gross profit, gross loss
-- **profit factor** = `grossProfit / abs(grossLoss)`
-- **expectancy** = `mean(rMultiple)` (průměrné R na obchod)
-- průměrná výhra / ztráta (v R i v měně), největší výhra / ztráta
-- nejdelší série výher / proher (streaks)
+**Základní:** počet obchodů, výhry/prohry, **win rate**, net/gross PnL, **profit factor** (`grossProfit / abs(grossLoss)`), **expectancy** (`mean(rMultiple)`), průměrná/největší výhra a ztráta, **streaks**.
 
-**Křivky a riziko:**
-- **equity curve** = kumulativní PnL v čase
-- **max drawdown** = největší pokles peak-to-trough na equity křivce
-- průměrné **MAE / MFE** (kvalita umístění SL/TP)
-- **R-multiple distribuce** (histogram)
+**Křivky a riziko:** **equity curve** (kumulativní PnL), **max drawdown** (peak-to-trough), průměrné **MAE/MFE**, **R-multiple distribuce** (histogram).
 
 **Segmentace (group-by) — sem patří reálná hodnota:**
-- výkon podle **setupu** (uživatelem definovaného) a podle **tagů**
-- výkon podle `session`, dne v týdnu, hodiny vstupu, `symbol`
-- výkon podle `entryTimeframe`
+- podle **setupu** a **tagů**, podle `session`, dne v týdnu, hodiny vstupu, `symbol`, `entryTimeframe`
 
 **Dodržování pravidel:**
-- % obchodů, kde byla dodržena jednotlivá pravidla (max risk %, cílové RR, denní limit, neposunul SL) — prahy z `UserSettings`
-- **korelace porušení s PnL** — kolik stojí porušení každého pravidla
+- % obchodů s dodrženým pravidlem (prahy z `UserSettings`) + **korelace porušení s PnL** (kolik tě stojí porušení každého pravidla)
 
-Příklad výstupu, který chce uživatel vidět:
+Příklad výstupu pro uživatele:
 > *"Setup 'Breakout' máš 64 % WR a 1,9R, ale 'Reversal' jen -0,3R → omez reversaly. Nejvíc vyděláváš v londýnské session."*
 
 ---
 
 ## 5. Moduly / obrazovky
-
-Routovací struktura (App Router):
 
 ```
 /                     → Dashboard
@@ -173,117 +180,143 @@ Routovací struktura (App Router):
 /trades/new           → Nový obchod
 /trades/[id]          → Detail / editace
 /analytics            → Breakdowny, distribuce, equity
-/insights             → AI analýza
-/settings             → Setupy, pravidla, účet, model
+/coach                → AI kouč (Pro+)
+/prop                 → Prop-firm režim (Elite)
+/settings             → Setupy, pravidla, prop challenge, účet
 ```
 
 ### 5.1 Dashboard (`/`)
-Rychlý přehled: klíčové KPI karty (net PnL, win rate, profit factor, expectancy, aktuální drawdown), zmenšená equity curve, posledních pár obchodů, "streak" indikátor.
-**Animace:** staggered reveal karet při načtení, **count-up animace čísel** v KPI, equity křivka se "nakreslí" (draw-on).
+KPI karty (net PnL, win rate, profit factor, expectancy, drawdown), zmenšená equity curve, poslední obchody, streak indikátor.
+**Animace:** staggered reveal karet, **count-up** čísel, **draw-on** equity křivky.
 
 ### 5.2 Kalendář profitů (`/calendar`) — klíčová featura
-- Měsíční grid. Každý den obarvený podle **čistého PnL** daného dne: zelený gradient = profit, červený = ztráta, **intenzita podle velikosti**. Neutrální/bez obchodů = tlumená buňka.
-- V buňce: čistý P/L dne + počet obchodů.
-- Postranní sloupec s **týdenními souhrny** (P/L za týden, počet obchodů, WR).
-- **Klik na den** → rozbalí/zobrazí obchody daného dne.
-- Přepínač **měsíc / rok** — roční pohled jako heatmapa (styl GitHub contributions).
-**Animace:** buňky se při změně měsíce objeví staggered (fade + scale-in), hover buňku jemně zvedne + glow odpovídající barvě dne, plynulý přechod mezi měsíci.
+- Měsíční grid, každý den obarvený podle **čistého PnL** (zelený/červený gradient, intenzita dle velikosti). V buňce P/L + počet obchodů.
+- Postranní **týdenní souhrny**. **Klik na den** → obchody daného dne.
+- Přepínač **měsíc / rok** (roční heatmapa stylu GitHub).
+**Animace:** buňky staggered fade+scale-in, hover lift + glow barvy dne, plynulý přechod měsíců.
 
 ### 5.3 Deník obchodů (`/trades`, `/trades/new`, `/trades/[id]`)
-- **Manuální zápis** přes formulář (Zod validace, sdílené schéma); výběr vlastního setupu + tagů.
-- **CSV import** — mapování sloupců z exportu brokera/TradingView na `Trade`.
-- **Screenshot grafu** — upload + (volitelně) **AI vision**, která z grafu vytáhne kontext (symbol, směr, přibližné úrovně) a předvyplní pole. Uživatel jen potvrdí.
-- Seznam = filtrovatelná/řaditelná tabulka (podle data, symbolu, setupu, tagů, R, dodržení pravidel).
+- **Manuální zápis** (Zod, výběr setupu + tagů). **CSV import** (mapování exportu brokera/TradingView).
+- **Screenshot grafu** + (volitelně) **AI vision**, co vytáhne kontext a předvyplní pole; uživatel jen potvrdí.
+- Seznam = filtrovatelná tabulka (datum, symbol, setup, tagy, R, dodržení pravidel).
 
 ### 5.4 Analytika (`/analytics`)
-- **Equity curve** (lightweight-charts) s draw-on animací a gradient fill pod křivkou.
-- **R-multiple distribuce** (histogram, Recharts).
-- Breakdown panely: podle **setupu / tagů** / session / času / symbolu.
-- **MAE/MFE scatter** — kde necháváš peníze na stole / jak hluboko jdeš do mínusu.
+- **Equity curve** (lightweight-charts, draw-on + gradient fill), **R-multiple distribuce**, breakdowny (setup/tagy/session/čas/symbol), **MAE/MFE scatter**.
 
 ### 5.5 Dodržování pravidel & behaviorální úniky
-Vlastní panel (může být součást Analytiky i Insights):
-- Tracking pravidel definovaných uživatelem v nastavení (max risk %, cílové RR, max obchodů/den).
-- Detekce vzorů: posouvání SL, **revenge trade** (vstup krátce po ztrátě), přeobchodování přes vlastní denní limit, předčasné zavírání winnerů (vysoké MFE vs malé realizované R).
-- U každého úniku: kolik tě stál (dopad na PnL).
+- Tracking uživatelských pravidel + detekce vzorů: posouvání SL, **revenge trade**, přeobchodování přes denní limit, předčasné zavírání winnerů (vysoké MFE vs malé R). U každého úniku: dopad na PnL.
 
-### 5.6 AI Insights (`/insights`)
-Viz sekce 6.
+### 5.6 AI kouč (`/coach`, Pro+)
+Viz sekce 6. UI: panel s nejnovější per-trade analýzou, **týdenní review**, chat "zeptej se na svoje obchody".
 
-### 5.7 Nastavení (`/settings`)
-- Definice vlastních **setupů** (název, popis, barva) a správa tagů.
-- **Pravidla:** velikost účtu, max risk %, cílové RR, max obchodů/den — tyhle prahy řídí vyhodnocování dodržování pravidel v celé appce.
-- AI model (OpenRouter), měna.
+### 5.7 Prop-firm režim (`/prop`, Elite)
+- Předdefinované **rule sety** prop firem (FTMO, MyFundedFX, …) + vlastní.
+- **Real-time tracking** z přiřazených obchodů: dnešní PnL vs **denní loss limit**, celkový drawdown vs **max loss**, progress vs **profit target**, počet obchodních dní.
+- **Alerty před prasknutím** (např. při 80 % denního limitu) — hlavní důvod, proč si to prop trader zaplatí.
+- "Challenge progress" dashboard (kolik zbývá k cíli / k limitu).
 
----
+### 5.8 Sdílitelné karty (growth)
+- One-tap export hezké karty (měsíční kalendář / equity / klíčové staty) jako **obrázek** ke sdílení (X, Discord, IG).
+- Decentní watermark s názvem appky (i ve free) = akviziční kanál.
+- Render server-side (Satori / @vercel/og) pro konzistentní vzhled.
 
-## 6. AI vrstva — jak přesně funguje
-
-**Tok:**
-1. Uživatel zvolí období / filtr (např. "poslední měsíc", "jen setup Breakout") a klikne **Analyzovat**.
-2. **Server** spočítá statistiky (sekce 4) pro daný výběr a sestaví **strukturovaný JSON**: agregované metriky + vzorek pozoruhodných obchodů (nej/nejhorší, porušená pravidla) — každý s `id`.
-3. Tenhle JSON jde do LLM přes **OpenRouter** se system promptem v duchu:
-   - *Jsi trading kouč. Uvažuj výhradně nad dodanými čísly. Nikdy nevymýšlej statistiky. Každý insight podlož konkrétním `tradeId` nebo konkrétní metrikou. Buď přímý a konkrétní.*
-4. Výstup AI je **strukturovaný** (silné stránky / úniky / doporučení / flagnuté obchody), vykreslí se v UI s odkazy na reálné obchody.
-
-**Grounding pravidlo:** UI nikdy nezobrazí číslo, které "řekla AI" — čísla pochází vždy ze statistického enginu. AI dodává jen text/interpretaci.
-
-**Konverzace:** volitelně chat režim ("zeptej se na svoje obchody"), kde se do kontextu vždy přiloží aktuální spočítané staty (stateless — plná historie + staty v každém requestu).
+### 5.9 Nastavení (`/settings`)
+- Vlastní **setupy** + tagy.
+- **Pravidla:** velikost účtu, max risk %, cílové RR, max obchodů/den.
+- **Prop challenge(y):** firma, fáze, limity, cíl.
+- AI / měna / plán.
 
 ---
 
-## 7. Design & animace (futuristický, prémiový)
+## 6. AI kouč — jak funguje (Claude API)
 
-Cílem je něco, co vypadá jako produkt z roku 2027 — **ne generický AI dashboard**.
+**Provider:** Anthropic **Claude API** (Messages API, `https://api.anthropic.com/v1/messages`). Volání **jen server-side**, klíč nikdy do klienta. Docs: https://docs.claude.com/en/api/overview
 
-**Aesthetic direction:** tmavé futuristické rozhraní s atmosférou a hloubkou. Žádné klišé (žádné fialové gradienty na bílé, žádný Inter/Roboto). Doporučení:
-- **Typografie:** výrazný, charakterní display font na čísla/nadpisy (např. monospace/technický grotesk pro "trading terminal" pocit) + čistý čitelný body font. Velká, sebevědomá čísla — metriky jsou hrdinové.
-- **Barvy:** dominantní tmavé pozadí (deep navy / near-black) s ostrými akcenty — profit/loss jako primární barevný jazyk (sytá zelená vs červená/magenta), jeden cool akcent (cyan/electric) pro UI prvky. CSS proměnné pro vše.
-- **Hloubka:** vrstvené průhlednosti (glass panely), jemný noise/grain overlay, gradient glow za klíčovými prvky, dramatické ale jemné stíny. Atmosféra, ne ploché plochy.
-- **Layout:** přehledný, terminálovsky strukturovaný, generózní negativní prostor kolem klíčových metrik.
+**Proaktivní, ne reaktivní** (přesně ten rozdíl proti konkurenci, jejíž AI je mělká a jen odpovídá na dotazy):
+
+1. **Po každém uzavřeném obchodu** — rychlá analýza levným modelem (**`claude-haiku-4-5-20251001`**): okamžitě flagne porušení pravidla nebo behaviorální vzor (revenge, mimo plán).
+2. **Týdenní performance review** — silnější model (**`claude-sonnet-4-6`**, pro max hloubku **`claude-opus-4-8`**): souhrn výkonu, top úniky, konkrétní doporučení, flagnuté obchody. Ideálně přes **Batch API** (async, levnější).
+3. **On-demand chat** — "zeptej se na svoje obchody"; do kontextu se vždy přiloží aktuální spočítané staty (stateless — plná historie + staty v každém requestu, vzor z NOVY).
+
+**Vstup do modelu** = vždy deterministicky spočítané staty + vzorek obchodů (každý s `id`). **Grounding:** AI nepočítá čísla, jen interpretuje a každý insight podkládá `tradeId`. UI nikdy nezobrazí číslo "od AI".
+
+**Structured output:** prompt na čisté JSON (`strengths`, `leaks`, `recommendations`, `flaggedTradeIds`), bezpečně parsovat (stripni ```json fence). Tenhle vzor znáš z NOVY.
+
+**Šetření tokenů (drží marži):** **prompt caching** na systémový prompt kouče + uživatelova pravidla/setupy (opakují se v každém volání). Levný model na rutinu (per-trade), drahý jen na týdenní hloubku, hromadné reviews přes Batch API.
+
+---
+
+## 7. Monetizace & business model
+
+**Pozicování:** retail-first (široká cílovka aktivních traderů), **prop-firm režim jako prémiový tier**. Freemium.
+
+**Tiery:**
+- **Free** — manuální zápis, základní staty, kalendář (omezená historie, např. 30 dní / strop obchodů), **sdílitelné karty** (s watermarkem = growth). AI: 1 ukázková analýza.
+- **Pro (~$15–25/měs, roční billing)** — neomezeně obchodů i historie, **proaktivní AI kouč**, plná analytika, R-multiple distribuce, MAE/MFE, CSV import.
+- **Elite / Prop (~$35–45/měs)** — vše z Pro + **prop-firm režim** (rule sety, real-time tracking, alerty), broker auto-sync, nejhlubší behaviorální AI, priorita.
+
+**Gating AI:** Kouč běží na placeném Claude API → tokeny stojí peníze. Proto AI jen Pro+; free max 1 ochutnávka. Tím se drží marže (viz sekce 6 — náklady).
+
+**Growth smyčka:** sdílitelné karty s watermarkem → tradeři je postují na X/Discord → levná akvizice. Free tier = vstupní bod (přímá konkurence free plán nemá).
+
+**Vedlejší příjmy:** affiliate prop firem a brokerů (tučné programy), white-label pro trading komunity/edukátory (recurring, vyšší ACV), volitelný lifetime deal při launchi (rychlá hotovost + proti subscription únavě).
+
+---
+
+## 8. Design & animace (futuristický, prémiový)
+
+Cíl: produkt, co vypadá jako z roku 2027 — **ne generický AI dashboard**.
+
+**Aesthetic:** tmavé futuristické rozhraní s atmosférou a hloubkou. Žádná klišé (žádné fialové gradienty na bílé, žádný Inter/Roboto).
+- **Typografie:** výrazný charakterní display font na čísla/nadpisy (monospace/technický grotesk = "trading terminal") + čistý body font. Velká sebevědomá čísla — metriky jsou hrdinové.
+- **Barvy:** dominantní tmavé pozadí (deep navy / near-black), profit/loss jako primární barevný jazyk (sytá zelená vs červená/magenta), jeden cool akcent (cyan/electric). CSS proměnné pro vše.
+- **Hloubka:** glass panely, jemný noise/grain, gradient glow za klíčovými prvky, jemné dramatické stíny. Atmosféra, ne ploché plochy.
+- **Layout:** terminálovsky strukturovaný, generózní negativní prostor kolem klíčových metrik.
 
 **Motion (Motion / Framer Motion):**
-- **Účelové, ne dekorativní.** Jeden dobře zorchestrovaný page-load se staggered reveal dělá víc než deset rozházených mikrointerakcí.
-- Konkrétně: staggered entrance karet, **count-up** animace čísel, **draw-on** equity křivky, fade+scale-in buněk kalendáře, plynulé route transitions, hover micro-interakce (lift + glow), skeleton/shimmer loadery.
-- **Spring-based** easing (přirozený pohyb), animovat **jen `transform` a `opacity`** (GPU, 60 fps).
-- Respektovat `prefers-reduced-motion` (přístupnost) — animace se degradují gracefully.
-- Konzistentní "motion language" napříč celou appkou (stejné easingy, doby trvání).
+- **Účelové, ne dekorativní.** Jeden zorchestrovaný page-load se staggered reveal > deset rozházených mikrointerakcí.
+- Konkrétně: staggered entrance karet, **count-up** čísel, **draw-on** equity křivky, fade+scale-in buněk kalendáře, plynulé route transitions, hover lift+glow, skeleton/shimmer loadery.
+- **Spring-based** easing, animovat **jen `transform` a `opacity`** (GPU, 60 fps).
+- Respektovat `prefers-reduced-motion`. Konzistentní "motion language" (stejné easingy/doby).
 
 ---
 
-## 8. Pořadí implementace (milníky)
+## 9. Pořadí implementace (milníky)
 
-- **M1 — Fundament:** datový model + DB + migrace, CRUD obchodů (manuální zápis), vlastní setupy + nastavení pravidel, Zod schémata. *Bez tohohle nejede nic.*
-- **M2 — Stats engine:** `lib/stats/` čisté funkce + unit testy. Žádné UI, jen ověřená čísla.
-- **M3 — Dashboard + Analytika:** vykreslení reálných metrik, equity curve, distribuce.
-- **M4 — Kalendář profitů:** měsíční/roční pohled, klik na den.
-- **M5 — AI vrstva:** Insights nad spočítanými staty, grounding, OpenRouter.
-- **M6 — Polish:** screenshot upload + AI vision, CSV import, finální motion design, responsivita.
+- **M1 — Fundament:** datový model + DB + migrace, CRUD obchodů, vlastní setupy + nastavení pravidel, Zod schémata. *Bez tohohle nejede nic.*
+- **M2 — Stats engine:** `lib/stats/` čisté funkce + unit testy.
+- **M3 — Dashboard + Analytika:** reálné metriky, equity curve, distribuce.
+- **M4 — Kalendář profitů + sdílitelné karty:** klíčová featura + brzká akviziční smyčka.
+- **M5 — AI kouč (Claude API):** per-trade poznámky + týdenní review + grounding + structured output.
+- **M6 — Prop-firm režim + broker auto-sync:** rule sety, real-time tracking, alerty (prémiový tier).
+- **M7 — Polish:** screenshot→vision, CSV import, finální motion, mobile.
 
-Doporučení: M1–M2 udělat opravdu pečlivě (schéma + správnost statů), zbytek se na tom postaví rychle.
+M1–M2 udělat opravdu pečlivě (schéma + správnost statů) — zbytek se na tom postaví rychle.
 
 ---
 
-## 9. Env proměnné
+## 10. Env proměnné
 
 ```env
 DATABASE_URL=postgres://...
-OPENROUTER_API_KEY=...
-AI_MODEL=...                      # např. nvidia/nemotron... nebo jiný model
+ANTHROPIC_API_KEY=...
+CLAUDE_MODEL_FAST=claude-haiku-4-5-20251001     # per-trade poznámky
+CLAUDE_MODEL_DEEP=claude-sonnet-4-6             # týdenní review (nebo claude-opus-4-8)
 NEXT_PUBLIC_SITE_URL=...
 # Režim B (multi-user):
 # CLERK_SECRET_KEY=...
 # NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=...
 # Storage pro screenshoty:
-# UPLOADTHING_TOKEN=...  (nebo S3 přístup)
+# UPLOADTHING_TOKEN=...
 ```
 
 ---
 
-## 10. Nefunkční požadavky
+## 11. Nefunkční požadavky
 
-- **Výkon:** animace 60 fps, server-rendered data tam, kde to jde (RSC), žádné zbytečné client bundly.
-- **Bezpečnost:** data per-`userId`, validace vstupů Zod na serveru, API klíče jen server-side (nikdy do klienta).
-- **Správnost:** statistický engine pokrytý testy — chybná matika = zničená důvěra v celý nástroj.
-- **Responsivita:** plně funkční na desktopu i mobilu (kalendář a tabulky degradují do mobilního layoutu).
+- **Výkon:** animace 60 fps, server-rendered data (RSC) tam, kde to jde, žádné zbytečné client bundly.
+- **Bezpečnost:** data per-`userId`, validace Zod na serveru, API klíče jen server-side.
+- **Správnost:** stats engine pokrytý testy — chybná matika = zničená důvěra.
+- **AI náklady:** levný model na rutinu, prompt caching, Batch API; AI jen v placených tierech.
+- **Responsivita:** plně funkční desktop i mobil (kalendář a tabulky degradují do mobilního layoutu).
 - **Přístupnost:** `prefers-reduced-motion`, kontrasty, klávesová ovladatelnost formulářů.

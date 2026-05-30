@@ -188,7 +188,7 @@ export async function getTrades(filters?: {
           }
         : {}),
     },
-    include: { setup: true, screenshots: true },
+    include: { setup: true, screenshots: true, propChallenge: { select: { id: true, firmName: true, phase: true } } },
     orderBy: { entryTime: "desc" },
   });
 }
@@ -196,6 +196,6 @@ export async function getTrades(filters?: {
 export async function getTradeById(id: string): Promise<TradeWithRelations | null> {
   return prisma.trade.findUnique({
     where: { id },
-    include: { setup: true, screenshots: true },
+    include: { setup: true, screenshots: true, propChallenge: { select: { id: true, firmName: true, phase: true } } },
   });
 }

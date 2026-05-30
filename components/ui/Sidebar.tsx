@@ -9,7 +9,8 @@ const NAV = [
   { href: "/calendar",  label: "Kalendář",    icon: "◫" },
   { href: "/trades",    label: "Obchody",     icon: "≡" },
   { href: "/analytics", label: "Analytika",   icon: "◈" },
-  { href: "/insights",  label: "AI Insights", icon: "✦" },
+  { href: "/coach",     label: "AI Kouč",     icon: "✦" },
+  { href: "/prop",      label: "Prop-firm",   icon: "◉" },
   { href: "/settings",  label: "Nastavení",   icon: "⚙" },
 ];
 

@@ -47,11 +47,15 @@ model Trade {
   notes        String?       @db.Text
   screenshots  Screenshot[]
 
+  propChallengeId String?
+  propChallenge   PropChallenge? @relation(fields: [propChallengeId], references: [id])
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([userId, entryTime])
   @@index([userId, setupId])
+  @@index([userId, propChallengeId])
 }
 
 model Setup {
@@ -73,6 +77,26 @@ model UserSettings {
   targetRR        Float  @default(2)
   maxTradesPerDay Int    @default(3)
   currency        String @default("USD")
+  plan            Plan   @default(FREE)
+}
+
+model PropChallenge {
+  id              String     @id @default(cuid())
+  userId          String
+  firmName        String
+  phase           String?
+  accountSize     Float
+  dailyLossLimit  Float
+  maxLossLimit    Float
+  profitTarget    Float?
+  minTradingDays  Int?
+  startDate       DateTime
+  status          PropStatus @default(ACTIVE)
+  trades          Trade[]
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@index([userId])
 }
 
 model Screenshot {
@@ -106,4 +130,16 @@ enum EmotionState {
   REVENGE
   TILT
   UNCERTAIN
+}
+
+enum PropStatus {
+  ACTIVE
+  PASSED
+  FAILED
+}
+
+enum Plan {
+  FREE
+  PRO
+  ELITE
 }
