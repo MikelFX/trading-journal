@@ -1,0 +1,109 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Trade {
+  id     String @id @default(cuid())
+  userId String
+
+  symbol    String
+  direction Direction
+  status    TradeStatus @default(CLOSED)
+
+  entryPrice   Float
+  exitPrice    Float?
+  stopLoss     Float
+  takeProfit   Float?
+  positionSize Float
+  entryTime    DateTime
+  exitTime     DateTime?
+
+  riskAmount  Float
+  riskPercent Float?
+  realizedPnl Float?
+  fees        Float    @default(0)
+  rMultiple   Float?
+
+  setupId        String?
+  setup          Setup?   @relation(fields: [setupId], references: [id])
+  tags           String[]
+  entryTimeframe String?
+  session        Session?
+
+  mae Float?
+  mfe Float?
+
+  followedRiskRule Boolean?
+  followedRRTarget Boolean?
+  withinDailyLimit Boolean?
+  movedStop        Boolean  @default(false)
+
+  emotionState EmotionState?
+  notes        String?       @db.Text
+  screenshots  Screenshot[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, entryTime])
+  @@index([userId, setupId])
+}
+
+model Setup {
+  id          String  @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  color       String?
+  trades      Trade[]
+
+  @@unique([userId, name])
+}
+
+model UserSettings {
+  id              String @id @default(cuid())
+  userId          String @unique
+  accountSize     Float?
+  maxRiskPercent  Float  @default(1)
+  targetRR        Float  @default(2)
+  maxTradesPerDay Int    @default(3)
+  currency        String @default("USD")
+}
+
+model Screenshot {
+  id        String  @id @default(cuid())
+  tradeId   String
+  url       String
+  extracted Json?
+  trade     Trade   @relation(fields: [tradeId], references: [id], onDelete: Cascade)
+}
+
+enum Direction {
+  LONG
+  SHORT
+}
+
+enum TradeStatus {
+  OPEN
+  CLOSED
+  CANCELLED
+}
+
+enum Session {
+  ASIA
+  LONDON
+  NEWYORK
+}
+
+enum EmotionState {
+  CALM
+  FOMO
+  REVENGE
+  TILT
+  UNCERTAIN
+}

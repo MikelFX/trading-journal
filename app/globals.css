@@ -1,0 +1,105 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #080c14;
+  --color-surface: #0d1420;
+  --color-surface-2: #111827;
+  --color-border: #1e293b;
+  --color-border-bright: #2d3f55;
+
+  --color-text: #e2e8f0;
+  --color-text-muted: #64748b;
+  --color-text-dim: #334155;
+
+  --color-profit: #00d68f;
+  --color-profit-dim: rgba(0, 214, 143, 0.15);
+  --color-loss: #ff3d71;
+  --color-loss-dim: rgba(255, 61, 113, 0.15);
+  --color-neutral: #64748b;
+
+  --color-accent: #00b4d8;
+  --color-accent-dim: rgba(0, 180, 216, 0.15);
+  --color-accent-bright: #0ef;
+
+  --font-display: "JetBrains Mono", "Fira Code", "Cascadia Code", monospace;
+  --font-body: "Inter", "SF Pro Display", system-ui, sans-serif;
+
+  --radius: 8px;
+  --radius-lg: 12px;
+
+  --shadow-glow-profit: 0 0 20px rgba(0, 214, 143, 0.2);
+  --shadow-glow-loss: 0 0 20px rgba(255, 61, 113, 0.2);
+  --shadow-glow-accent: 0 0 20px rgba(0, 180, 216, 0.2);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.6;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-bg);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-bright);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+}
+
+/* Selection */
+::selection {
+  background: var(--color-accent-dim);
+  color: var(--color-accent-bright);
+}
+
+/* Mono numbers */
+.tabular {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Profit/loss colors */
+.profit { color: var(--color-profit); }
+.loss   { color: var(--color-loss); }
+.neutral { color: var(--color-text-muted); }
+
+/* Glass panel */
+.glass {
+  background: rgba(13, 20, 32, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--color-border);
+}
+
+/* Noise overlay for depth */
+.noise::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events: none;
+  border-radius: inherit;
+}
