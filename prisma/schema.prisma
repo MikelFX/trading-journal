@@ -45,6 +45,7 @@ model Trade {
 
   emotionState EmotionState?
   notes        String?       @db.Text
+  aiNote       String?       @db.Text
   screenshots  Screenshot[]
 
   propChallengeId String?

@@ -4,6 +4,8 @@ import { getTrades } from "@/lib/actions/trades";
 import { getSettings } from "@/lib/actions/settings";
 import { computeCoreStats, computeSegmentStats, computeRuleCompliance } from "@/lib/stats/engine";
 import { PageWrapper, FadeUp, BlurReveal, StaggerChildren, StaggerItem } from "@/components/ui/PageWrapper";
+import { EquityChart } from "@/components/ui/EquityChart";
+import { MaeMfeScatter } from "@/components/ui/MaeMfeScatter";
 import type { TradeWithRelations } from "@/lib/db/types";
 
 export default async function AnalyticsPage() {
@@ -23,7 +25,21 @@ export default async function AnalyticsPage() {
   const bySetup = computeSegmentStats(statTrades, (t) => t.setupId ? trades.find((tr: TradeWithRelations) => tr.id === t.id)?.setup?.name ?? t.setupId : null);
   const bySession = computeSegmentStats(statTrades, (t) => t.session);
   const bySymbol = computeSegmentStats(statTrades, (t) => t.symbol);
+  const byDayOfWeek = computeSegmentStats(statTrades, (t) => {
+    const days = ["Ne", "Po", "Út", "St", "Čt", "Pá", "So"];
+    return days[new Date(t.entryTime).getDay()];
+  });
   const rules = computeRuleCompliance(statTrades);
+
+  const scatterPoints = statTrades
+    .filter((t) => t.mae !== null && t.mfe !== null && t.status === "CLOSED")
+    .map((t) => ({
+      mae: t.mae as number,
+      mfe: t.mfe as number,
+      rMultiple: t.rMultiple ?? 0,
+      symbol: t.symbol,
+      id: t.id,
+    }));
 
   return (
     <PageWrapper>
@@ -43,6 +59,14 @@ export default async function AnalyticsPage() {
         </BlurReveal>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+
+          {/* Equity curve */}
+          <BlurReveal delay={0.05}>
+            <Section title="Equity křivka">
+              <EquityChart data={stats.equityCurve} height={300} />
+            </Section>
+          </BlurReveal>
+
           {/* R-distribution */}
           <BlurReveal delay={0.1}>
             <Section title="R-multiple distribuce">
@@ -74,19 +98,29 @@ export default async function AnalyticsPage() {
             </Section>
           </BlurReveal>
 
+          {/* MAE/MFE scatter */}
+          {scatterPoints.length > 0 && (
+            <BlurReveal delay={0.15}>
+              <Section title="MAE / MFE Scatter">
+                <MaeMfeScatter points={scatterPoints} />
+              </Section>
+            </BlurReveal>
+          )}
+
           {/* Segment tables */}
           {[
             { title: "Výkon podle setupu", data: bySetup },
             { title: "Výkon podle session", data: bySession },
             { title: "Výkon podle symbolu", data: bySymbol },
+            { title: "Výkon podle dne v týdnu", data: byDayOfWeek },
           ].map(({ title, data }, i) => (
-            <BlurReveal key={title} delay={0.15 + i * 0.08}>
+            <BlurReveal key={title} delay={0.2 + i * 0.07}>
               <SegmentTable title={title} segments={data} currency={currency} />
             </BlurReveal>
           ))}
 
           {/* Rules compliance */}
-          <BlurReveal delay={0.4}>
+          <BlurReveal delay={0.5}>
             <Section title="Dodržování pravidel">
               <StaggerChildren>
                 {rules.map((rule) => (
@@ -111,9 +145,9 @@ export default async function AnalyticsPage() {
             </Section>
           </BlurReveal>
 
-          {/* MAE/MFE */}
+          {/* MAE/MFE averages */}
           {(stats.avgMae !== null || stats.avgMfe !== null) && (
-            <BlurReveal delay={0.5}>
+            <BlurReveal delay={0.6}>
               <Section title="MAE / MFE průměry">
                 <div style={{ display: "flex", gap: 48 }}>
                   {stats.avgMae !== null && (
@@ -155,34 +189,36 @@ function SegmentTable({ title, segments, currency }: { title: string; segments: 
       {segments.length === 0 ? (
         <p style={{ fontSize: 13, color: "var(--color-text-muted)" }}>Žádná data.</p>
       ) : (
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ borderBottom: "1px solid var(--color-border)" }}>
-              {["Segment", "Obchodů", "Win Rate", "Expectancy", "Net P/L"].map((h) => (
-                <th key={h} style={{ padding: "8px 0", textAlign: "left", fontSize: 10, color: "var(--color-text-muted)", fontWeight: 500, letterSpacing: "0.1em", textTransform: "uppercase" }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {segments.sort((a, b) => b.netPnl - a.netPnl).map((s) => (
-              <tr key={s.label} className="tr-hover" style={{ borderBottom: "1px solid rgba(26,36,56,0.5)" }}>
-                <td style={{ padding: "10px 0", fontWeight: 600, fontSize: 13 }}>{s.label}</td>
-                <td style={{ padding: "10px 0", fontSize: 13, color: "var(--color-text-muted)" }}>{s.trades}</td>
-                <td style={{ padding: "10px 0" }}>
-                  <span className="tabular" style={{ fontSize: 13, color: s.winRate >= 0.5 ? "var(--color-profit)" : "var(--color-loss)" }}>
-                    {(s.winRate * 100).toFixed(1)} %
-                  </span>
-                </td>
-                <td className="tabular" style={{ padding: "10px 0", fontSize: 13, color: s.expectancy > 0 ? "var(--color-profit)" : "var(--color-loss)" }}>
-                  {s.expectancy >= 0 ? "+" : ""}{s.expectancy.toFixed(2)}R
-                </td>
-                <td className="tabular" style={{ padding: "10px 0", fontSize: 13, fontWeight: 600, color: s.netPnl >= 0 ? "var(--color-profit)" : "var(--color-loss)" }}>
-                  {s.netPnl >= 0 ? "+" : ""}{s.netPnl.toFixed(2)} {currency}
-                </td>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 400 }}>
+            <thead>
+              <tr style={{ borderBottom: "1px solid var(--color-border)" }}>
+                {["Segment", "Obchodů", "Win Rate", "Expectancy", "Net P/L"].map((h) => (
+                  <th key={h} style={{ padding: "8px 0", textAlign: "left", fontSize: 10, color: "var(--color-text-muted)", fontWeight: 500, letterSpacing: "0.1em", textTransform: "uppercase" }}>{h}</th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {segments.sort((a, b) => b.netPnl - a.netPnl).map((s) => (
+                <tr key={s.label} className="tr-hover" style={{ borderBottom: "1px solid rgba(26,36,56,0.5)" }}>
+                  <td style={{ padding: "10px 0", fontWeight: 600, fontSize: 13 }}>{s.label}</td>
+                  <td style={{ padding: "10px 0", fontSize: 13, color: "var(--color-text-muted)" }}>{s.trades}</td>
+                  <td style={{ padding: "10px 0" }}>
+                    <span className="tabular" style={{ fontSize: 13, color: s.winRate >= 0.5 ? "var(--color-profit)" : "var(--color-loss)" }}>
+                      {(s.winRate * 100).toFixed(1)} %
+                    </span>
+                  </td>
+                  <td className="tabular" style={{ padding: "10px 0", fontSize: 13, color: s.expectancy > 0 ? "var(--color-profit)" : "var(--color-loss)" }}>
+                    {s.expectancy >= 0 ? "+" : ""}{s.expectancy.toFixed(2)}R
+                  </td>
+                  <td className="tabular" style={{ padding: "10px 0", fontSize: 13, fontWeight: 600, color: s.netPnl >= 0 ? "var(--color-profit)" : "var(--color-loss)" }}>
+                    {s.netPnl >= 0 ? "+" : ""}{s.netPnl.toFixed(2)} {currency}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </Section>
   );

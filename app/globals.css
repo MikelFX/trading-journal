@@ -198,3 +198,87 @@ main { position: relative; z-index: 1; }
     transition-duration: 0.01ms !important;
   }
 }
+
+/* === Spin animation for loading indicator === */
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.spin { animation: spin 1.5s linear infinite; }
+
+/* === Responsive layout === */
+.app-layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+.app-main {
+  flex: 1;
+  margin-left: 240px;
+  padding: 40px 48px;
+  min-width: 0;
+}
+
+/* Mobile hamburger button */
+.mobile-menu-btn {
+  display: none;
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 100;
+  width: 40px;
+  height: 40px;
+  background: rgba(10, 16, 32, 0.95);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: var(--color-text);
+  backdrop-filter: blur(10px);
+  transition: all 0.2s ease;
+}
+
+/* Mobile sidebar overlay */
+.sidebar-overlay {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .app-main {
+    margin-left: 0;
+    padding: 64px 16px 24px;
+  }
+
+  .mobile-menu-btn {
+    display: flex;
+  }
+
+  .sidebar-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 45;
+    backdrop-filter: blur(4px);
+  }
+
+  /* Horizontal scroll on tables */
+  table {
+    min-width: 480px;
+  }
+
+  /* KPI grid: 2 cols on mobile */
+  .kpi-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .app-main {
+    padding: 60px 12px 20px;
+  }
+
+  .kpi-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 10px !important;
+  }
+}

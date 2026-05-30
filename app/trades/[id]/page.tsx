@@ -49,8 +49,7 @@ export default async function TradeDetailPage({ params }: { params: Promise<{ id
             {" / "}{trade.symbol}
           </div>
           <h1 style={{ fontSize: 24, fontWeight: 700, fontFamily: "var(--font-display)" }}>
-            {trade.symbol}
-            {" "}
+            {trade.symbol}{" "}
             <span style={{ color: trade.direction === "LONG" ? "var(--color-profit)" : "var(--color-loss)", fontSize: 16 }}>
               {trade.direction}
             </span>
@@ -70,6 +69,42 @@ export default async function TradeDetailPage({ params }: { params: Promise<{ id
         </div>
         <DeleteTradeButton id={trade.id} />
       </div>
+
+      {/* AI Note */}
+      {trade.aiNote && (
+        <div style={{
+          background: "var(--color-surface)",
+          border: "1px solid rgba(0,200,255,0.2)",
+          borderRadius: "var(--radius-lg)",
+          padding: 20,
+          marginBottom: 24,
+          position: "relative",
+          overflow: "hidden",
+        }}>
+          <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: "linear-gradient(90deg, transparent, var(--color-accent), transparent)" }} />
+          <div style={{ fontSize: 11, letterSpacing: "0.12em", color: "var(--color-accent)", textTransform: "uppercase", marginBottom: 10, fontFamily: "var(--font-display)", display: "flex", alignItems: "center", gap: 6 }}>
+            <span>✦</span> AI Poznámka — Haiku
+          </div>
+          <p style={{ fontSize: 13, lineHeight: 1.8, color: "var(--color-text)" }}>{trade.aiNote}</p>
+        </div>
+      )}
+      {!trade.aiNote && trade.status === "CLOSED" && (
+        <div style={{
+          background: "var(--color-surface)",
+          border: "1px solid var(--color-border)",
+          borderRadius: "var(--radius-lg)",
+          padding: "14px 20px",
+          marginBottom: 24,
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          fontSize: 12,
+          color: "var(--color-text-muted)",
+        }}>
+          <span style={{ animation: "spin 2s linear infinite", display: "inline-block" }}>◌</span>
+          AI poznámka se generuje na pozadí...
+        </div>
+      )}
 
       <TradeForm setups={setups} currency={settings.currency} initialData={initialData} />
     </div>

@@ -21,21 +21,20 @@ export default async function TradesPage() {
             <h1 style={{ fontSize: 28, fontWeight: 700, fontFamily: "var(--font-display)" }}>Obchody</h1>
             <p style={{ color: "var(--color-text-muted)", marginTop: 4, fontSize: 13 }}>{trades.length} záznamů</p>
           </div>
-          <Link
-            href="/trades/new"
-            style={{
-              padding: "11px 24px",
-              background: "linear-gradient(135deg, var(--color-accent), #0070ff)",
-              color: "#000",
-              borderRadius: "var(--radius)",
-              fontWeight: 700,
-              fontSize: 13,
-              textDecoration: "none",
-              boxShadow: "0 4px 20px rgba(0,200,255,0.25)",
-            }}
-          >
-            + Nový obchod
-          </Link>
+          <div style={{ display: "flex", gap: 10 }}>
+            <Link
+              href="/trades/import"
+              style={{ padding: "11px 18px", background: "var(--color-surface)", border: "1px solid var(--color-border)", color: "var(--color-text-muted)", borderRadius: "var(--radius)", fontWeight: 600, fontSize: 13, textDecoration: "none" }}
+            >
+              CSV Import
+            </Link>
+            <Link
+              href="/trades/new"
+              style={{ padding: "11px 24px", background: "linear-gradient(135deg, var(--color-accent), #0070ff)", color: "#000", borderRadius: "var(--radius)", fontWeight: 700, fontSize: 13, textDecoration: "none", boxShadow: "0 4px 20px rgba(0,200,255,0.25)" }}
+            >
+              + Nový obchod
+            </Link>
+          </div>
         </div>
       </FadeUp>
 

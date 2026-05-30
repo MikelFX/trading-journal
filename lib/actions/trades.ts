@@ -4,34 +4,44 @@ import { prisma } from "@/lib/db/client";
 import { TradeFormSchema, type TradeFormData } from "@/lib/schemas";
 import type { TradeWithRelations } from "@/lib/db/types";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 
 const DEFAULT_USER_ID = "local";
 
 function computeDerivedFields(data: TradeFormData) {
   let realizedPnl: number | undefined;
   let rMultiple: number | undefined;
-  let followedRiskRule: boolean | undefined;
-  let followedRRTarget: boolean | undefined;
 
   if (data.exitPrice !== undefined && data.status === "CLOSED") {
     const direction = data.direction === "LONG" ? 1 : -1;
     const priceDiff = (data.exitPrice - data.entryPrice) * direction;
     realizedPnl = priceDiff * data.positionSize - data.fees;
-    if (data.riskAmount > 0) {
-      rMultiple = realizedPnl / data.riskAmount;
-    }
+    if (data.riskAmount > 0) rMultiple = realizedPnl / data.riskAmount;
   }
 
-  return { realizedPnl, rMultiple, followedRiskRule, followedRRTarget };
+  return { realizedPnl, rMultiple };
+}
+
+async function triggerAiNote(tradeId: string) {
+  try {
+    const { perTradeAnalysis } = await import("@/lib/actions/ai");
+    const [trade, settings] = await Promise.all([
+      prisma.trade.findUnique({ where: { id: tradeId }, select: { symbol: true, direction: true, rMultiple: true, movedStop: true, emotionState: true, followedRiskRule: true, followedRRTarget: true, withinDailyLimit: true } }),
+      prisma.userSettings.findUnique({ where: { userId: DEFAULT_USER_ID }, select: { maxRiskPercent: true, targetRR: true, maxTradesPerDay: true } }),
+    ]);
+    if (!trade) return;
+    const note = await perTradeAnalysis(JSON.stringify(trade), JSON.stringify(settings ?? {}));
+    await prisma.trade.update({ where: { id: tradeId }, data: { aiNote: note } });
+  } catch {
+    // silent — aiNote is optional
+  }
 }
 
 export async function createTrade(raw: TradeFormData) {
   const data = TradeFormSchema.parse(raw);
   const derived = computeDerivedFields(data);
 
-  const settings = await prisma.userSettings.findUnique({
-    where: { userId: DEFAULT_USER_ID },
-  });
+  const settings = await prisma.userSettings.findUnique({ where: { userId: DEFAULT_USER_ID } });
 
   const followedRiskRule =
     settings?.maxRiskPercent && data.riskPercent !== undefined
@@ -90,6 +100,10 @@ export async function createTrade(raw: TradeFormData) {
     },
   });
 
+  if (data.status === "CLOSED" && process.env.ANTHROPIC_API_KEY) {
+    after(() => triggerAiNote(trade.id));
+  }
+
   revalidatePath("/");
   revalidatePath("/trades");
   revalidatePath("/calendar");
@@ -102,9 +116,7 @@ export async function updateTrade(id: string, raw: TradeFormData) {
   const data = TradeFormSchema.parse(raw);
   const derived = computeDerivedFields(data);
 
-  const settings = await prisma.userSettings.findUnique({
-    where: { userId: DEFAULT_USER_ID },
-  });
+  const settings = await prisma.userSettings.findUnique({ where: { userId: DEFAULT_USER_ID } });
 
   const followedRiskRule =
     settings?.maxRiskPercent && data.riskPercent !== undefined
@@ -145,8 +157,13 @@ export async function updateTrade(id: string, raw: TradeFormData) {
       movedStop: data.movedStop,
       emotionState: data.emotionState,
       notes: data.notes,
+      aiNote: null, // regenerate on next view
     },
   });
+
+  if (data.status === "CLOSED" && process.env.ANTHROPIC_API_KEY) {
+    after(() => triggerAiNote(id));
+  }
 
   revalidatePath("/");
   revalidatePath("/trades");
@@ -188,7 +205,11 @@ export async function getTrades(filters?: {
           }
         : {}),
     },
-    include: { setup: true, screenshots: true, propChallenge: { select: { id: true, firmName: true, phase: true } } },
+    include: {
+      setup: true,
+      screenshots: true,
+      propChallenge: { select: { id: true, firmName: true, phase: true } },
+    },
     orderBy: { entryTime: "desc" },
   });
 }
@@ -196,6 +217,89 @@ export async function getTrades(filters?: {
 export async function getTradeById(id: string): Promise<TradeWithRelations | null> {
   return prisma.trade.findUnique({
     where: { id },
-    include: { setup: true, screenshots: true, propChallenge: { select: { id: true, firmName: true, phase: true } } },
+    include: {
+      setup: true,
+      screenshots: true,
+      propChallenge: { select: { id: true, firmName: true, phase: true } },
+    },
   });
+}
+
+type BulkRow = {
+  symbol: string;
+  direction: "LONG" | "SHORT";
+  entryPrice: number;
+  exitPrice?: number;
+  stopLoss: number;
+  positionSize: number;
+  entryTime: string;
+  exitTime?: string;
+  riskAmount: number;
+  riskPercent?: number;
+  fees?: number;
+  notes?: string;
+};
+
+export async function bulkCreateTrades(rows: BulkRow[]) {
+  const settings = await prisma.userSettings.findUnique({ where: { userId: DEFAULT_USER_ID } });
+  let count = 0;
+
+  for (const row of rows) {
+    try {
+      const status = row.exitPrice ? "CLOSED" : "OPEN";
+      let realizedPnl: number | undefined;
+      let rMultiple: number | undefined;
+
+      if (status === "CLOSED" && row.exitPrice) {
+        const dir = row.direction === "LONG" ? 1 : -1;
+        realizedPnl = (row.exitPrice - row.entryPrice) * dir * row.positionSize - (row.fees ?? 0);
+        if (row.riskAmount > 0) rMultiple = realizedPnl / row.riskAmount;
+      }
+
+      const followedRiskRule =
+        settings?.maxRiskPercent && row.riskPercent !== undefined
+          ? row.riskPercent <= settings.maxRiskPercent
+          : undefined;
+
+      const followedRRTarget =
+        settings?.targetRR && rMultiple !== undefined
+          ? rMultiple >= settings.targetRR
+          : undefined;
+
+      await prisma.trade.create({
+        data: {
+          userId: DEFAULT_USER_ID,
+          symbol: row.symbol.toUpperCase(),
+          direction: row.direction,
+          status,
+          entryPrice: row.entryPrice,
+          exitPrice: row.exitPrice,
+          stopLoss: row.stopLoss,
+          positionSize: row.positionSize,
+          entryTime: new Date(row.entryTime),
+          exitTime: row.exitTime ? new Date(row.exitTime) : undefined,
+          riskAmount: row.riskAmount,
+          riskPercent: row.riskPercent,
+          realizedPnl,
+          fees: row.fees ?? 0,
+          rMultiple,
+          followedRiskRule,
+          followedRRTarget,
+          notes: row.notes,
+          tags: [],
+          movedStop: false,
+        },
+      });
+      count++;
+    } catch {
+      // skip invalid rows
+    }
+  }
+
+  revalidatePath("/");
+  revalidatePath("/trades");
+  revalidatePath("/calendar");
+  revalidatePath("/analytics");
+
+  return { count };
 }

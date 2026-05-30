@@ -28,6 +28,7 @@ export type TradeWithRelations = {
   movedStop: boolean;
   emotionState: "CALM" | "FOMO" | "REVENGE" | "TILT" | "UNCERTAIN" | null;
   notes: string | null;
+  aiNote: string | null;
   createdAt: Date;
   updatedAt: Date;
   propChallengeId: string | null;

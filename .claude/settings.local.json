@@ -4,7 +4,12 @@
       "PowerShell(npm init *)",
       "PowerShell(New-Item *)",
       "PowerShell(vercel *)",
-      "PowerShell(npm i *)"
+      "PowerShell(npm i *)",
+      "Bash(dir \"C:\\\\Users\\\\s3run\\\\Desktop\\\\tradingJournal\" /B)",
+      "Bash(findstr /i \".md\")",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)"
     ]
   }
 }
