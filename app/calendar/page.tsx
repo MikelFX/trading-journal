@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { getTrades } from "@/lib/actions/trades";
 import { getSettings } from "@/lib/actions/settings";
 import { CalendarView } from "@/components/ui/CalendarView";
+import { PageWrapper, FadeUp } from "@/components/ui/PageWrapper";
 import type { TradeWithRelations } from "@/lib/db/types";
 
 export default async function CalendarPage() {
@@ -20,14 +21,17 @@ export default async function CalendarPage() {
   }));
 
   return (
-    <div style={{ maxWidth: 1100 }}>
-      <div style={{ marginBottom: 32 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 700, fontFamily: "var(--font-display)" }}>Kalendář profitů</h1>
-        <p style={{ color: "var(--color-text-muted)", marginTop: 4, fontSize: 13 }}>
-          Přehled výkonnosti po dnech
-        </p>
-      </div>
-      <CalendarView trades={tradeData} currency={settings.currency} />
-    </div>
+    <PageWrapper>
+      <FadeUp delay={0}>
+        <div style={{ marginBottom: 36 }}>
+          <div style={{ fontSize: 12, letterSpacing: "0.15em", color: "var(--color-accent)", textTransform: "uppercase", marginBottom: 8, fontFamily: "var(--font-display)" }}>Calendar</div>
+          <h1 style={{ fontSize: 28, fontWeight: 700, fontFamily: "var(--font-display)" }}>Kalendář profitů</h1>
+          <p style={{ color: "var(--color-text-muted)", marginTop: 4, fontSize: 13 }}>Přehled výkonnosti po dnech</p>
+        </div>
+      </FadeUp>
+      <FadeUp delay={0.15}>
+        <CalendarView trades={tradeData} currency={settings.currency} />
+      </FadeUp>
+    </PageWrapper>
   );
 }
